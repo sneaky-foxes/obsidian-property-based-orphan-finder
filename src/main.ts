@@ -10,7 +10,7 @@ import {
 //import ParentBasedOrphanFinderSettingTab from './settings';
 
 interface FileCollection {
-  [name: string]: FileItem[];
+  [path: string]: FileItem[];
 }
 
 interface FileItem {
@@ -28,13 +28,12 @@ interface FileItem {
 
 export default class ParentBasedOrphanFinder extends Plugin {
   //	settings: ParentBasedOrphanFinderSettings;
-  graph: NoteGraph;
   parentKey: string;
 
   async onload() {
     //		await this.loadSettings();
     this.parentKey = "up"; // @TODO pull front setting
-    this.buildGraph();
+    await this.buildGraph();
 
     // Add a command to lint the current file
     this.addCommand({});
@@ -58,12 +57,21 @@ export default class ParentBasedOrphanFinder extends Plugin {
   //	}
 
   async buildGraph() {
-    this.graph = {};
-    const orphans: FileCollection = {}
-    const filesToProcess: FileCollection = {};
+    // Confirmed arrays are strings of paths (including folders).
+    const confirmedOrphans: string[] = [];
+    const confirmedNonOrphans: string[] = [];
+    const unconfirmedFiles: FileCollection = {};
 
     // Get the metadataCache.
     const cachedMetadata = this.app.metadataCache;
+
+    // Set the central note as the confirmed non orphan note.
+    // @TODO we might want to validate the Central Note in settings?
+    const centralNoteName = "Central Note"; // @TODO get from settings. Determine if the settings gets a path or a name.
+    const centralNote = this.app.vault
+      .getFiles()
+      .filter((f) => f.basename == centralNoteName)[0]; // @TODO there must be a better way to do this.
+    confirmedNonOrphans.push(centralNote.path);
 
     // We only care about markdown files.
     const markdownFiles = this.app.vault
@@ -80,9 +88,7 @@ export default class ParentBasedOrphanFinder extends Plugin {
       // We only care about frontmatter links.
       // If this file has no frontmatter links, it's automatically an orphan.
       if (frontmatterLinks == undefined || frontmatterLinks.length < 1) {
-        orphans[file.name] = {
-          file: file
-        }
+        confirmedOrphans.push(file.path);
       } else {
         const parentLinks = frontmatterLinks.filter((link) => {
           const linkKey = link.key;
@@ -108,19 +114,54 @@ export default class ParentBasedOrphanFinder extends Plugin {
 
         // If there are no parent links, it's automatically an orphan.
         if (parentLinks.length == 0) {
-          orphans[file.name] = {
-            file: file
-          }
+          confirmedOrphans.push(file.path);
         } else {
-          filesToProcess[file.name] = {
+          unconfirmedFiles[file.path] = {
             file: file,
-            parentLinks: parentLinks
-          }
+            parentLinks: parentLinks,
+          };
         }
-
-        console.log(parentLinks);
       }
     }
-    console.log(orphans);
+
+    console.log("done locating all notes that might be ready to process");
+    console.log(confirmedOrphans);
+    console.log(unconfirmedFiles);
+    console.log(confirmedNonOrphans);
+
+    // Process all files that have parent links.
+    for (let file in unconfirmedFiles) {
+      await this.checkParentage(
+        unconfirmedFiles[file].file,
+        unconfirmedFiles[file].parents,
+        confirmedOrphans,
+        unconfirmedFiles,
+        confirmedNonOrphans,
+      );
+    }
+  }
+
+  async checkParentage(
+    file: TFile,
+    parents: LinkCache[],
+    confirmedOrphans: FileCollection,
+    unconfirmedFiles: FileCollection,
+    confirmedNonOrphans: FileCollection,
+  ) {
+    console.log("I'm checking!");
+    console.log(`count of orphans: ${confirmedOrphans.length}`);
+    console.log(`count of non-orphans: ${confirmedNonOrphans.length}`);
+    //console.log(`count of unconfirmed: ${unconfirmedFiles.length}`);
+    if (file.path in confirmedNonOrphans) {
+      confirmedNonOrphans.push(file.path);
+      return;
+    } else if (file.path in confirmedOrphans) {
+      confirmedOrphans.push(file.path);
+      return;
+    } else {
+      for (let parent in parents) {
+        // @TODO
+      }
+    }
   }
 }
