@@ -1,0 +1,10 @@
+{
+	"id": "parent-based-orphan-finder",
+	"name": "Parent-based Orphan Finder",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.5",
+	"description": "Locates orphans when using a parent key to create a map of content",
+	"author": "sneaky-foxes",
+	"authorUrl": "https://github.com/sneaky-foxes",
+	"isDesktopOnly": false
+}
